@@ -1,0 +1,97 @@
+-- Roblox Instant Prompt + 5 Death Setups (2x Teleport Loops)
+local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- NAKA-SET SA 5 POSITIONS AT 2 TIMES TELEPORT
+local deathPositions = {} 
+local currentSetupIndex = 1
+local maxSetups = 5 -- Limitado sa eksaktong 5 setups
+
+-- 1. BAGUHIN ANG LAHAT NG PROXIMITY PROMPT PARA MAGING INSTANT (NO HOLD / NO COOLDOWN)
+local function makePromptsInstant(object)
+    if object:IsA("ProximityPrompt") then
+        object.HoldDuration = 0 -- Instant activation
+    end
+end
+
+-- Gawing instant ang mga kasalukuyang prompt sa laro
+for _, prompt in ipairs(Workspace:GetDescendants()) do
+    makePromptsInstant(prompt)
+end
+
+-- Watch para sa mga bagong lalabas na prompt habang naglalaro
+Workspace.DescendantAdded:Connect(makePromptsInstant)
+
+-- (UP TO 5 SETUPS - SALIT-SALIT ANG PAGPALIT)
+local function trackDeath()
+    LocalPlayer.CharacterAdded:Connect(function(character)
+        local humanoid = character:WaitForChild("Humanoid")
+        humanoid.Died:Connect(function()
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                -- I-save ang posisyon sa kasalukuyang Setup Index (1 hanggang 5)
+                deathPositions[currentSetupIndex] = rootPart.CFrame
+                print("[Script] Saved to Setup " .. currentSetupIndex .. ": " .. tostring(rootPart.CFrame.Position))
+                
+                -- Babalik sa Setup 1 kapag lumagpas ng 5 ang patay
+                currentSetupIndex = (currentSetupIndex % maxSetups) + 1
+            end
+        end)
+    end)
+
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+        LocalPlayer.Character.Humanoid.Died:Connect(function()
+            local rootPart = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                deathPositions[currentSetupIndex] = rootPart.CFrame
+                print("[Script] Saved to Setup " .. currentSetupIndex .. ": " .. tostring(rootPart.CFrame.Position))
+                
+                currentSetupIndex = (currentSetupIndex % maxSetups) + 1
+            end
+        end)
+    end
+end
+
+trackDeath()
+
+-- 3. TELEPORT SYSTEM KAPAG NAG-INTERACT (2 BESES MAG-TETELEPORT BAWAT ACTIVE SETUP)
+ProximityPromptService.PromptTriggered:Connect(function(prompt, player)
+    if player == LocalPlayer then
+        -- Suriin kung may kahit isang setup na naglalaman ng lokasyon
+        local hasSavedPosition = false
+        for i = 1, maxSetups do
+            if deathPositions[i] then
+                hasSavedPosition = true
+                break
+            end
+        end
+
+        if hasSavedPosition then
+            local character = LocalPlayer.Character
+            if character and character:FindFirstChild("HumanoidRootPart") then
+                
+                -- I-loop ang lahat ng 5 setups mula 1 hanggang 5
+                for setupNum = 1, maxSetups do
+                    local savedCFrame = deathPositions[setupNum]
+                    
+                    -- Kung may laman ang setup na ito, mag-teleport nang eksaktong 2 beses
+                    if savedCFrame then
+                        for i = 1, 2 do
+                            if character and character:FindFirstChild("HumanoidRootPart") then
+                                character.HumanoidRootPart.CFrame = savedCFrame
+                                print("[Script] Teleporting to Setup " .. setupNum .. "... (Loop: " .. i .. "/2)")
+                            end
+                            task.wait(0.05) -- Ligtas na delay para hindi mag-stuck ang character physics
+                        end
+                    end
+                end
+
+            end
+        else
+            warn("[Script] Hello Welcome Sa Script")
+        end
+    end
+end)
